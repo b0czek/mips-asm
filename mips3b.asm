@@ -1,165 +1,146 @@
+	.macro print_string(%string_address)
+	li $v0, 4
+	la $a0, %string_address
+	syscall
+	.end_macro
+	
+	.macro read_int(%dest_registry)
+	li $v0, 5
+	syscall
+	move %dest_registry, $v0
+	.end_macro
+		
+		
+	.data
+msg:		.asciiz "Podaj N:"
+loadmsg:	.asciiz " n: "
+errmsg: 	.asciiz "Blad"
+newline:	.asciiz "\n"
+separator:    	.asciiz ", "
+
+
+
 	.text
 	.globl main
 main:
-	li $v0,4
-	la $a0,msg
-	syscall
-
-	# load N
-	li $v0,5
-	syscall
-	move $s0,$v0
-
+	print_string(msg)
+	read_int($s0)
+	
 	bge $s0, 100, error
-	blt $s0, 0, error
+        blt $s0, 0, error
 
-	# allocate stack
 	mul $t0, $s0, 4
 	sub $sp, $sp, $t0
 	move $s1, $sp
+	
+	li $t0, 0
+load:
+		beq $t0, $s0, loaded
+	
+		li $v0,1
+ 	        move $a0,$t0
+	        syscall
+        
+	        print_string(loadmsg)
+ 	        read_int($t1)
+        
+        	mul $t2, $t0, 4
+        	add $t2, $t2, $s1
+        	sw $t1, ($t2)
 
-
-	li $s2, 0
-loadloop:
-	bge $s2, $s0, loaded
-
-	li $v0,1
-	move $a0,$s2
-	syscall
-	li $v0,4
-	la $a0,msgl
-	syscall
-
-	# load integer
-	li $v0,5
-	syscall
-	# calculate address to store value in
-	mul $t0, $s2, 4
-	add $t0, $t0, $s1
-	sw $v0, 0($t0)
-
-	# increment before loops
-	add $s2, $s2, 1
-
-	# call sort
-	move $a0, $s1
-	move $a1, $s2
-	jal sort
-
-	# print values
-	li $s3,0
-printloop:
-	bge $s3, $s2, printed
-	mul $t0, $s3, 4
-	add $t0, $t0, $s1
-
-	lw $a0, 0($t0)
-	li $v0, 1
-	syscall
-
-	add $t0, $s3, 1
-	beq $t0, $s2, printloop_noseparator
-	li $v0,4
-	la $a0, separator
-	syscall
-printloop_noseparator:
-
-	add $s3, $s3, 1
-	j printloop
-printed:
-	li $v0,4
-	la $a0, newline
-	syscall
-
-	j loadloop
+		add $t0, $t0, 1
+		j load
 loaded:
-	# free stack
+	move $a0, $s1
+	move $a1, $s0
+	jal sort
+	
+	li $t0, 0
+print:
+		beq $t0, $s0, printed
+	
+		mul $t1, $t0, 4
+		add $t1, $t1, $s1
+		
+		lw $a0, ($t1)
+		li $v0, 1
+		syscall
+	
+		add $t1, $t0, 1
+		beq $t1, $s0, nosep
+		print_string(separator)
+nosep:
+		add $t0, $t0, 1
+		j print
+printed:
 	mul $t0, $s0, 4
 	add $sp, $sp, $t0
 	j exit
 
+
 error:
-	li $v0,4
-	la $a0, errormsg
-	syscall
-	li $v0,1
-	move $a0, $s0
-	syscall
-
+	print_string(errmsg)
 exit:
-	li $v0,10
+	li $v0, 10
 	syscall
-
-
+	
+	
+	
+	
 sort:
 	# $a0 <- address of data
-	# $a1 <- data count
+        # $a1 <- data count
+        
+        sub $sp, $sp, 12
+        sw $s0, 0($sp)
+        sw $s1, 4($sp)
+        sw $ra, 8($sp)
+        move $s0,$a0
+        move $s1,$a1
 
-	# store registers s0 and s1 in memory
-	sub $sp, $sp, 12
-	sw $s0, 0($sp)
-	sw $s1, 4($sp)
-	# store return address to restore it after swap subroutine
-	sw $ra, 8($sp)
-	move $s0,$a0
-	move $s1,$a1
-
-	# iter1
-	li $t0, 0
+        li $t0, 0
 loop1:
-	bge $t0,$s1, sort_end
-	# iter2
-	li $t1, 0
-	move $t2,$s1
-	# n - iter1 - 1
-	sub $t2, $t2, 1
-	sub $t2, $t2, $t0
+		beq $t0, $s1, sort_end
+		li $t1, 0
+		
+		sub $t2, $s1, 1
+		sub $t2, $t2, $t0
 loop2:
-	bge $t1,$t2, loop1_end
-
-	# multiply iter2 by size of int
-	mul $t3, $t1, 4
-	# add address to it
-	add $t3, $t3, $s0
-	# load n from memory
-	lw $a0, 0($t3)
-	# load n+1
-	lw $a1, 4($t3)
-
-	# compare values
-	ble $a0, $a1, ifless
-	jal swap
-	# store values in memory
-	sw $a0, 0($t3)
-	sw $a1, 4($t3)
-
-ifless:
-	add $t1, $t1, 1
-	j loop2
-loop1_end:
-	add $t0, $t0, 1
-	j loop1
-
+			beq $t1, $t2, loop2_end
+			
+			mul $t3, $t1, 4
+			add $t3, $t3, $s0
+			
+			lw $t4, ($t3)
+			lw $t5, 4($t3)
+			
+			ble $t4, $t5, noswap
+			xor $t4, $t4, $t5
+			xor $t5, $t4, $t5
+			xor $t4, $t4, $t5
+			
+			sw $t4, ($t3)
+			sw $t5, 4($t3)
+noswap:
+			add $t1, $t1, 1
+			j loop2
+loop2_end:
+		add $t0, $t0, 1
+		j loop1
 sort_end:
-	lw $s0, 0($sp)
-	lw $s1, 4($sp)
-	lw $ra, 8($sp)
-	add $sp, $sp, 12
-	jr $ra
+        lw $s0, 0($sp)
+        lw $s1, 4($sp)
+        lw $ra, 8($sp)
+        add $sp, $sp, 12
 
+	jr $ra
+		
 swap:
 	# a0 <- element1
-	# a1 <- element2
-	# swap without buffer
-	xor $a0, $a0, $a1
-	xor $a1, $a0, $a1
-	xor $a0, $a0, $a1
-	jr $ra
-
-	.data
-msg: 		.asciiz "Podaj N: "
-msgl:		.asciiz " n: "
-errormsg:	.asciiz "error - n ="
-separator:	.asciiz ", "
-newline:	.asciiz "\n"
+        # a1 <- element2
+        # swap without buffer
+        xor $a0, $a0, $a1
+        xor $a1, $a0, $a1
+        xor $a0, $a0, $a1
+        jr $ra
 
